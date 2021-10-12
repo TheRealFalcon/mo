@@ -16,6 +16,16 @@ fn filename() -> String {
     dir() + "/mo"
 }
 
+fn get_searcher() -> Command {
+    let searchers = ["ripgrep", "rg", "ag", "ack", "grep"];
+    for searcher in searchers {
+        if let Ok(path) = which::which(searcher) {
+            return Command::new(path);
+        }
+    }
+    panic!("Couldn't find suitable searcher on system");
+}
+
 fn search(insensitive: bool, args: Vec<&str>) -> Result<(), Box<dyn std::error::Error>> {
     // Setup our cache file
     // let dir = env::var("HOME")? + "/.cache";
@@ -32,13 +42,14 @@ fn search(insensitive: bool, args: Vec<&str>) -> Result<(), Box<dyn std::error::
     let mut file = LineWriter::new(file);
 
     let mut my_collection: HashMap<&str, Vec<&str>> = HashMap::new();
-    let mut cmd = Command::new("rg");
+    // let mut searcher = Command::new("rg");
+    let mut searcher = get_searcher();
     if insensitive {
-        cmd.arg("-i");
+        searcher.arg("-i");
     }
-    cmd.arg("-H").arg("-n").args(&args);
-    debug!("Running: {:?}", &cmd);
-    let output = cmd.output()?;
+    searcher.arg("-H").arg("-n").args(&args);
+    debug!("Running: {:?}", &searcher);
+    let output = searcher.output()?;
     let stdout = String::from_utf8(output.stdout)?;
     let stderr = String::from_utf8(output.stderr)?;
     if !stderr.is_empty() {
@@ -100,11 +111,33 @@ fn open_match(line_num: usize) -> Result<(), Box<dyn std::error::Error>> {
     debug!("in open");
     let reader = BufReader::new(File::open(filename().as_str())?);
     let matching_line = reader.lines().take(line_num).last().unwrap()?;
-    // let (filename, line) = matching_line.rsplit_once(':').unwrap();
-    let mut cmd = Command::new("code");
-    cmd.arg("-g").arg(matching_line);
+    let (filename, line) = matching_line.rsplit_once(':').unwrap();
+
+    let mut cmd: Command;
+
+    // if let Ok(editor) = env::var("MO_EDITOR") {
+    //     let mut parts = editor.split_whitespace();
+    //     cmd = Command::new(parts.next().unwrap());
+    //     for arg in parts {
+    //         cmd.arg(arg);
+    //     }
+    // } else
+    if let Ok(path) = which::which("code") {
+        cmd = Command::new(path);
+        cmd.arg("-g").arg(matching_line);
+    } else if let Ok(path) = which::which("emacs") {
+        cmd = Command::new(path);
+        cmd.arg(format!("+{}", line));
+        cmd.arg(filename);
+    } else {
+        let path = which::which("vi").unwrap();
+        cmd = Command::new(path);
+        cmd.arg(format!("+{}", line));
+        cmd.arg(filename);
+    }
+
     debug!("Running: {:?}", cmd);
-    cmd.spawn()?;
+    // cmd.spawn()?;
     Ok(())
 }
 
