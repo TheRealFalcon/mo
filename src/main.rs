@@ -137,7 +137,7 @@ fn open_match(line_num: usize) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     debug!("Running: {:?}", cmd);
-    // cmd.spawn()?;
+    cmd.spawn()?;
     Ok(())
 }
 
